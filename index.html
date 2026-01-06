@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nursing AI Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .record-pulse { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } 100% { transform: scale(1); opacity: 1; } }
+        .hidden-section { display: none; }
+        .ews-critical { animation: shake 0.5s; border: 3px solid #dc2626; background-color: #fef2f2; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        
+        /* Tối ưu hóa cho màn hình lớn để không bị quá to */
+        @media (min-width: 1024px) {
+            .main-container { max-width: 1200px; margin: 0 auto; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans pb-10">
+
+    <header class="bg-blue-700 text-white p-4 sticky top-0 z-50 shadow-lg">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <i class="fas fa-wave-square"></i>
+                <h1 class="text-lg md:text-xl font-bold tracking-tight">Nursing AI Assistant</h1>
+                 <h1 class="text-base">@2026 BinhMinhAI</h1>
+            </div>
+            <div class="flex items-center gap-4">
+                <span class="hidden md:inline text-xs bg-blue-800 px-3 py-1 rounded-full italic">Chuẩn WHO - ICNP</span>
+                <span class="text-sm bg-blue-600 px-3 py-1 rounded shadow-inner font-semibold">Khoa: Hồi Sức</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-container p-4 md:p-6">
+        
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <div class="lg:col-span-4 space-y-6">
+                <div class="bg-white p-8 rounded-3xl shadow-sm border border-gray-200 text-center transition-all">
+                    <p class="text-gray-400 mb-6 uppercase text-xs font-bold tracking-widest">Giao tiếp ca trực</p>
+                    <button id="recordBtn" class="bg-red-500 hover:bg-red-600 text-white w-24 h-24 rounded-full shadow-xl transition-all active:scale-90 focus:outline-none flex items-center justify-center mx-auto">
+                        <i class="fas fa-microphone text-3xl"></i>
+                    </button>
+                    <p id="statusText" class="mt-6 text-sm font-medium text-gray-700 italic underline decoration-blue-300">Bấm để "Nghe ca trực"</p>
+                </div>
+
+                <div id="transcriptSection" class="bg-white p-5 rounded-2xl shadow-sm border border-blue-100 hidden-section">
+                    <h3 class="text-xs font-black text-blue-600 mb-3 flex items-center gap-2">
+                        <i class="fas fa-wave-square"></i> AI TRANSCRIPTION
+                    </h3>
+                    <div id="textOutput" class="text-gray-700 italic text-sm leading-relaxed border-l-4 border-blue-400 pl-4 py-1 bg-blue-50/30"></div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-8 space-y-6">
+                
+                <div id="ewsAlert" class="hidden-section p-5 rounded-2xl bg-red-600 text-white flex items-center gap-5 shadow-2xl ews-critical">
+                    <div class="bg-white/20 p-3 rounded-full">
+                        <i class="fas fa-exclamation-triangle text-3xl animate-bounce"></i>
+                    </div>
+                    <div>
+                        <p class="font-black text-base md:text-lg">CẢNH BÁO: CHỈ SỐ VƯỢT NGƯỠNG (EWS HIGH)</p>
+                        <p class="text-sm opacity-90 font-medium">Bệnh nhân có dấu hiệu diễn biến nặng, đề nghị can thiệp ngay!</p>
+                    </div>
+                </div>
+
+                <div id="previewSection" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hidden-section">
+                    <h3 class="text-xs font-black text-green-600 mb-4 flex items-center gap-2">
+                        <i class="fas fa-chart-line"></i> LIVE PREVIEW (CHỈ SỐ SINH TỒN)
+                    </h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div id="boxHR" class="p-4 rounded-xl text-center shadow-sm">
+                            <p class="text-[10px] font-bold uppercase tracking-widest mb-1 text-gray-500">Mạch</p>
+                            <p id="valHR" class="text-2xl font-black">--</p>
+                            <span class="text-[10px] opacity-60">lần/phút</span>
+                        </div>
+                        <div id="boxBP" class="p-4 rounded-xl text-center shadow-sm">
+                            <p class="text-[10px] font-bold uppercase tracking-widest mb-1 text-gray-500">Huyết Áp</p>
+                            <p id="valBP" class="text-2xl font-black">--</p>
+                            <span class="text-[10px] opacity-60">mmHg</span>
+                        </div>
+                        <div id="boxSPO2" class="p-4 rounded-xl text-center shadow-sm">
+                            <p class="text-[10px] font-bold uppercase tracking-widest mb-1 text-gray-500">Nồng độ Oxy</p>
+                            <p id="valSPO2" class="text-2xl font-black">--</p>
+                            <span class="text-[10px] opacity-60">SpO2 %</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="emrSection" class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 hidden-section">
+                    <div class="flex justify-between items-center mb-5 border-b pb-3">
+                        <h3 class="text-xs font-black text-gray-800 flex items-center gap-2">
+                            <i class="fas fa-file-medical text-blue-500"></i> PHIẾU CHĂM SÓC (MẪU 09/BV)
+                        </h3>
+                        <span class="text-[10px] font-mono bg-gray-100 px-2 py-1 rounded text-gray-500">ID: VN-EMR-00123</span>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-[10px] text-gray-500 uppercase font-black mb-1 block">Diễn biến bệnh trạng</label>
+                                <textarea id="noteOutput" class="w-full text-sm border border-gray-200 rounded-xl bg-gray-50 p-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all" rows="4"></textarea>
+                            </div>
+                            <div class="space-y-4">
+                                <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 shadow-inner">
+                                    <p class="text-[10px] text-blue-600 font-black mb-2 flex items-center gap-2">
+                                        <i class="fas fa-microchip"></i> CHẨN ĐOÁN ICNP GỢI Ý:
+                                    </p>
+                                    <p id="icnpOutput" class="text-sm font-bold text-blue-900 italic leading-tight"></p>
+                                </div>
+                                <div class="flex gap-3">
+                                    <button class="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-xl text-sm hover:bg-gray-300 transition-colors">SỬA ĐỔI</button>
+                                    <button id="confirmBtn" class="flex-[2] bg-green-600 text-white font-black py-4 rounded-xl shadow-lg hover:bg-green-700 transition-all flex items-center justify-center gap-2 active:scale-95">
+                                        <i class="fas fa-signature text-lg"></i> XÁC NHẬN & KÝ SỐ
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        /* GIỮ NGUYÊN LOGIC CŨ CỦA BẠN */
+        const recordBtn = document.getElementById('recordBtn');
+        const statusText = document.getElementById('statusText');
+        const transcriptSection = document.getElementById('transcriptSection');
+        const previewSection = document.getElementById('previewSection');
+        const emrSection = document.getElementById('emrSection');
+        const ewsAlert = document.getElementById('ewsAlert');
+        
+        const mockData = {
+            transcript: "Báo cáo: Bệnh nhân giường 12 khó thở tăng, vã mồ hôi. Đo thấy mạch nhanh 125 lần/phút, HA tụt còn 85/55 mmHg, SpO2 chỉ còn 89%.",
+            hr: 125,
+            bp_sys: 85,
+            bp_dia: 55,
+            spo2: 89,
+            icnp: "10023512 - Trao đổi khí suy giảm (WHO ICNP Standard)",
+            note: "BN tỉnh, tiếp xúc được nhưng khó thở nhiều, vã mồ hôi hột. Mạch 125 l/p, HA 85/55 mmHg, SpO2 89%. Đã xử trí hút đờm và báo BS trực cấp cứu."
+        };
+
+        let isRecording = false;
+
+        recordBtn.addEventListener('click', () => {
+            if (!isRecording) {
+                isRecording = true;
+                recordBtn.classList.add('record-pulse', 'bg-red-600');
+                statusText.innerText = "Hệ thống AI đang lắng nghe...";
+                setTimeout(() => { showAIResult(); }, 1500);
+            } else {
+                resetUI();
+            }
+        });
+
+        function checkEWS(hr, sys, spo2) {
+            let critical = false;
+            if (hr > 120 || hr < 50) { 
+                document.getElementById('boxHR').className = 'p-4 rounded-xl text-center bg-red-100 text-red-700 border-2 border-red-500 shadow-md';
+                critical = true;
+            } else {
+                document.getElementById('boxHR').className = 'p-4 rounded-xl text-center bg-gray-50 text-gray-700 border border-gray-100';
+            }
+
+            if (sys < 90 || sys > 180) {
+                document.getElementById('boxBP').className = 'p-4 rounded-xl text-center bg-red-100 text-red-700 border-2 border-red-500 shadow-md';
+                critical = true;
+            } else {
+                document.getElementById('boxBP').className = 'p-4 rounded-xl text-center bg-gray-50 text-gray-700 border border-gray-100';
+            }
+
+            if (spo2 < 92) {
+                document.getElementById('boxSPO2').className = 'p-4 rounded-xl text-center bg-red-100 text-red-700 border-2 border-red-500 shadow-md';
+                critical = true;
+            } else {
+                document.getElementById('boxSPO2').className = 'p-4 rounded-xl text-center bg-gray-50 text-gray-700 border border-gray-100';
+            }
+
+            if (critical) { ewsAlert.classList.remove('hidden-section'); }
+        }
+
+        function showAIResult() {
+            transcriptSection.classList.remove('hidden-section');
+            document.getElementById('textOutput').innerText = mockData.transcript;
+            previewSection.classList.remove('hidden-section');
+            document.getElementById('valHR').innerText = mockData.hr;
+            document.getElementById('valBP').innerText = mockData.bp_sys + "/" + mockData.bp_dia;
+            document.getElementById('valSPO2').innerText = mockData.spo2;
+            checkEWS(mockData.hr, mockData.bp_sys, mockData.spo2);
+            emrSection.classList.remove('hidden-section');
+            document.getElementById('noteOutput').value = mockData.note;
+            document.getElementById('icnpOutput').innerText = mockData.icnp;
+            statusText.innerText = "Phân tích hoàn tất!";
+            recordBtn.classList.remove('record-pulse');
+        }
+
+        function resetUI() {
+            isRecording = false;
+            recordBtn.classList.remove('record-pulse', 'bg-red-600');
+            statusText.innerText = "Bấm để 'Nghe ca trực'";
+            [transcriptSection, previewSection, emrSection, ewsAlert].forEach(s => s.classList.add('hidden-section'));
+        }
+
+        document.getElementById('confirmBtn').addEventListener('click', () => {
+            alert("Dữ liệu đã được đồng bộ chuẩn ICNP và ký số thành công!");
+            resetUI();
+        });
+    </script>
+</body>
+</html>
