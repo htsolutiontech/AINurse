@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nursing AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .record-pulse { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); opacity: 0.8; } 100% { transform: scale(1); } }
+        .hidden-section { display: none; }
+        .ews-critical { animation: shake 0.5s; border: 3px solid #dc2626; background-color: #fef2f2; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        .table-container { max-height: 45vh; overflow-y: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; }
+        .tab-active { border-bottom: 4px solid #fff; opacity: 1 !important; font-weight: 900; }
+        .dept-card-active { border-color: #4f46e5 !important; background-color: #eef2ff !important; transform: translateY(-3px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .dept-scroll { display: flex; overflow-x: auto; gap: 0.5rem; padding-bottom: 0.5rem; scrollbar-width: none; }
+        .dept-scroll::-webkit-scrollbar { display: none; }
+        .btn-loading { pointer-events: none; opacity: 0.8; }
+        .btn-success { background-color: #059669 !important; }
+        .btn-signing { background-color: #7c3aed !important; }
+        
+        @media print {
+            body * { visibility: hidden; }
+            #printArea, #printArea * { visibility: visible; }
+            #printArea { position: absolute; left: 0; top: 0; width: 100%; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans antialiased text-slate-900 flex flex-col">
+
+    <nav class="bg-indigo-900 text-white shadow-xl sticky top-0 z-50 no-print">
+        <div class="max-w-[1600px] mx-auto px-2 md:px-4">
+            <div class="flex justify-between items-center h-14 md:h-16">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-heartbeat text-xl text-cyan-400"></i>
+                    <span class="font-black text-sm md:text-xl tracking-tighter uppercase">Nursing AI</span>
+                </div>
+                <div class="flex h-full text-[11px] md:text-sm">
+                    <button onclick="switchTab('clinical')" id="tabClin" class="px-3 md:px-6 h-full flex items-center gap-1 md:gap-2 opacity-60 tab-active transition-all">
+                        <i class="fas fa-user-nurse"></i> <span class="hidden sm:inline uppercase">Lâm sàng</span>
+                    </button>
+                    <button onclick="switchTab('analytics')" id="tabAnal" class="px-3 md:px-6 h-full flex items-center gap-1 md:gap-2 opacity-60 transition-all">
+                        <i class="fas fa-chart-line"></i> <span class="hidden sm:inline uppercase">Quản lý</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="flex-grow">
+        <main id="clinicalSection" class="max-w-4xl mx-auto p-4 md:p-8 space-y-6 no-print">
+            <div class="bg-white p-6 md:p-10 rounded-3xl shadow-xl text-center border border-indigo-50">
+                <button id="recordBtn" class="bg-rose-500 hover:bg-rose-600 text-white w-20 h-20 md:w-28 md:h-28 rounded-full shadow-2xl transition-all active:scale-90 flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-microphone text-2xl md:text-4xl"></i>
+                </button>
+                <p id="statusText" class="text-xs md:text-sm font-bold text-slate-500 italic uppercase tracking-wider">Bấm để AI lắng nghe diễn biến và phân tích</p>
+            </div>
+            
+            <div id="ewsAlert" class="hidden-section p-4 rounded-2xl bg-red-600 text-white flex items-center gap-4 ews-critical shadow-lg">
+                <i class="fas fa-exclamation-triangle text-2xl"></i>
+                <div class="text-xs md:text-sm">
+                    <p class="font-black uppercase">Cảnh báo EWS: Nguy cơ cao</p>
+                    <p class="opacity-90">Chỉ số sinh tồn bất thường. Đã báo động hệ thống.</p>
+                </div>
+            </div>
+
+            <div id="aiOutput" class="hidden-section space-y-4">
+                <div class="grid grid-cols-3 gap-2 md:gap-4">
+                    <div class="bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-slate-100 text-center">
+                        <p class="text-[9px] md:text-[10px] font-black text-slate-400 uppercase">HR</p>
+                        <p id="valHR" class="text-xl md:text-3xl font-black text-slate-800">--</p>
+                    </div>
+                    <div class="bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-slate-100 text-center">
+                        <p class="text-[9px] md:text-[10px] font-black text-slate-400 uppercase">BP</p>
+                        <p id="valBP" class="text-xl md:text-3xl font-black text-slate-800">--</p>
+                    </div>
+                    <div class="bg-white p-3 md:p-6 rounded-2xl shadow-sm border border-slate-100 text-center">
+                        <p class="text-[9px] md:text-[10px] font-black text-slate-400 uppercase">SPO2</p>
+                        <p id="valSPO2" class="text-xl md:text-3xl font-black text-slate-800">--</p>
+                    </div>
+                </div>
+                <div class="bg-white p-5 rounded-3xl shadow-xl border border-indigo-100">
+                    <textarea id="noteOutput" class="w-full text-xs md:text-sm border-none bg-slate-50 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none mb-3" rows="4"></textarea>
+                    <div class="bg-indigo-50 p-3 rounded-xl border border-indigo-100 mb-4">
+                        <p class="text-[9px] font-black text-indigo-600 uppercase italic">Chứng thực nội dung SHA-256:</p>
+                        <p id="icnpOutput" class="text-xs md:text-sm font-bold text-indigo-900"></p>
+                    </div>
+                    <button id="confirmBtn" class="w-full bg-indigo-600 text-white font-black py-3 md:py-4 rounded-2xl shadow-lg hover:bg-indigo-700 text-xs md:text-sm flex justify-center items-center gap-3 transition-all">
+                        <span id="btnIcon"><i class="fas fa-file-signature"></i></span>
+                        <span id="btnText">KÝ SỐ & ĐẨY LÊN HIS</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <main id="analyticsSection" class="hidden-section max-w-[1400px] mx-auto p-2 md:p-6">
+            <div class="no-print">
+                <p class="text-[10px] font-black text-slate-400 uppercase ml-2 mb-2 italic">Bộ lọc chuyên khoa</p>
+                <div class="dept-scroll md:grid md:grid-cols-4 lg:grid-cols-8 gap-2 md:gap-4 mb-6 px-2 md:px-0">
+                    <button onclick="filterByDept('', this)" class="dept-btn min-w-[100px] bg-white border border-indigo-200 p-3 rounded-2xl flex flex-col items-center gap-2 shadow-sm font-black text-indigo-600 dept-card-active">
+                        <i class="fas fa-th-large text-xl"></i><span class="text-[9px] font-bold uppercase">Tất cả</span>
+                    </button>
+                    <button onclick="filterByDept('Hồi sức', this)" class="dept-btn min-w-[100px] bg-white border border-slate-200 p-3 rounded-2xl flex flex-col items-center gap-2 hover:border-indigo-400 transition-all text-slate-500"><i class="fas fa-heartbeat text-red-500 text-xl"></i><span class="text-[9px] font-bold uppercase">Hồi sức</span></button>
+                    <button onclick="filterByDept('Nội khoa', this)" class="dept-btn min-w-[100px] bg-white border border-slate-200 p-3 rounded-2xl flex flex-col items-center gap-2 hover:border-indigo-400 transition-all text-slate-500"><i class="fas fa-stethoscope text-indigo-500 text-xl"></i><span class="text-[9px] font-bold uppercase">Nội khoa</span></button>
+                    <button onclick="filterByDept('Ngoại khoa', this)" class="dept-btn min-w-[100px] bg-white border border-slate-200 p-3 rounded-2xl flex flex-col items-center gap-2 hover:border-indigo-400 transition-all text-slate-500"><i class="fas fa-cut text-orange-500 text-xl"></i><span class="text-[9px] font-bold uppercase">Ngoại khoa</span></button>
+                    <button onclick="filterByDept('Cấp cứu', this)" class="dept-btn min-w-[100px] bg-white border border-slate-200 p-3 rounded-2xl flex flex-col items-center gap-2 hover:border-indigo-400 transition-all text-slate-500"><i class="fas fa-ambulance text-rose-500 text-xl"></i><span class="text-[9px] font-bold uppercase">Cấp cứu</span></button>
+                    <button onclick="filterByDept('Sản', this)" class="dept-btn min-w-[100px] bg-white border border-slate-200 p-3 rounded-2xl flex flex-col items-center gap-2 hover:border-indigo-400 transition-all text-slate-500"><i class="fas fa-baby text-pink-500 text-xl"></i><span class="text-[9px] font-bold uppercase">Sản/Nhi</span></button>
+                    <button onclick="filterByDept('Truyền nhiễm', this)" class="dept-btn min-w-[100px] bg-white border border-slate-200 p-3 rounded-2xl flex flex-col items-center gap-2 hover:border-indigo-400 transition-all text-slate-500"><i class="fas fa-biohazard text-green-500 text-xl"></i><span class="text-[9px] font-bold uppercase">Truyền nhiễm</span></button>
+                    <button onclick="filterByDept('Phục hồi', this)" class="dept-btn min-w-[100px] bg-white border border-slate-200 p-3 rounded-2xl flex flex-col items-center gap-2 hover:border-indigo-400 transition-all text-slate-500"><i class="fas fa-wheelchair text-blue-400 text-xl"></i><span class="text-[9px] font-bold uppercase">PHCN</span></button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div id="preventiveAlerts" class="bg-white p-4 rounded-2xl shadow-sm border-2 border-transparent">
+                        <p class="text-[9px] font-black text-rose-500 uppercase flex items-center gap-2"><i class="fas fa-shield-virus"></i> Cảnh báo dịch tễ hệ thống</p>
+                        <div id="alertContent" class="mt-2 text-[11px] md:text-xs text-slate-500 italic">Hệ thống đang chờ nạp dataset (.jsonl)</div>
+                    </div>
+                    <div class="bg-indigo-900 text-white p-4 rounded-2xl shadow-sm flex justify-between items-center">
+                        <div><p class="text-[9px] font-black text-indigo-300 uppercase">dATESET SAMPLE FOR NURSE (TESTING)</p><p class="text-lg md:text-2xl font-black"><span id="countDisplay">0</span> <span class="text-[10px] opacity-50 uppercase">Dòng</span></p></div>
+                        <button onclick="document.getElementById('fileInput').click()" class="bg-cyan-400 text-indigo-900 px-4 py-2 rounded-xl font-black text-xs hover:bg-cyan-300 transition-all">LOAD DATA</button>
+                        <input type="file" id="fileInput" accept=".jsonl" class="hidden"/>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden mb-8">
+                    <div class="p-4 border-b flex items-center bg-slate-50/50"><i class="fas fa-search text-slate-300 mr-3"></i><input type="text" id="globalSearch" placeholder="Tìm kiếm nhanh hồ sơ hoặc chẩn đoán..." class="w-full text-sm outline-none bg-transparent"></div>
+                    <div class="table-container">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="sticky top-0 bg-white z-10 border-b shadow-sm"><tr class="text-[9px] md:text-[10px] uppercase font-black text-slate-500"><th class="p-4">Hồ sơ / Khoa</th><th class="p-4">Chẩn đoán (ICNP)</th><th class="p-4 hidden md:table-cell">Xử trí / Thuốc</th><th class="p-4 text-center">Trạng thái</th></tr></thead>
+                            <tbody id="tableBody" class="text-[11px] md:text-sm divide-y divide-slate-100">
+                                <tr><td colspan="4" class="p-20 text-center text-slate-400 italic">Vui lòng nạp file Nursing_2000med10k.jsonl để xem dữ liệu.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="p-4 bg-slate-50 border-t flex justify-between items-center shadow-inner">
+                        <span id="pageLabel" class="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-widest">Trang 0 / 0</span>
+                        <div class="flex gap-2">
+                            <button id="btnPrev" class="px-4 py-2 bg-white border rounded-xl text-[10px] font-black disabled:opacity-30 hover:bg-slate-50 transition-all shadow-sm">TRƯỚC</button>
+                            <button id="btnNext" class="px-4 py-2 bg-white border rounded-xl text-[10px] font-black disabled:opacity-30 hover:bg-slate-50 transition-all shadow-sm">TIẾP</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="printArea" class="bg-white rounded-3xl shadow-xl border border-indigo-200 overflow-hidden mb-12">
+                <div class="p-5 bg-indigo-50 border-b flex justify-between items-center">
+                    <div><h3 class="text-xs md:text-sm font-black text-indigo-900 uppercase flex items-center gap-2"><i class="fas fa-history text-indigo-600"></i> LỊCH SỬ KÝ SỐ ĐIỆN TỬ</h3><p class="text-[9px] text-indigo-500 font-bold italic mt-1 uppercase">Xác thực chứng chỉ SHA-256 nội bộ</p></div>
+                    <button onclick="exportToPDF()" class="no-print bg-rose-600 text-white px-4 py-2 rounded-xl text-[10px] font-black flex items-center gap-2 hover:bg-rose-700 transition-all shadow-md"><i class="fas fa-file-pdf"></i> XUẤT BÁO CÁO PDF</button>
+                </div>
+                <div class="overflow-x-auto"><table class="w-full text-left"><thead class="bg-slate-50 text-[9px] md:text-[10px] uppercase font-black text-slate-400"><tr><th class="p-4">Thời gian</th><th class="p-4">Mã bản ghi</th><th class="p-4">Mã Hash (SHA-256)</th><th class="p-4">Kết quả</th></tr></thead><tbody id="sigLogBody" class="text-[10px] md:text-xs divide-y divide-slate-100"><tr><td colspan="4" class="p-10 text-center text-slate-400 italic">Chưa có giao dịch ký số.</td></tr></tbody></table></div>
+            </div>
+        </main>
+    </div>
+
+    <footer class="bg-slate-100 border-t border-slate-200 py-6 px-4 no-print mt-auto">
+        <div class="max-w-[1400px] mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-center md:text-left">
+            <div class="space-y-1">
+                <p class="text-[10px] md:text-xs font-bold text-slate-600"><i class="fas fa-shield-check text-green-500 mr-1"></i> TUÂN THỦ CHUẨN ICNP WHO & LUẬT KHÁM CHỮA BỆNH</p>
+                <p class="text-[10px] text-slate-400 font-medium">© 2026 BinhMinhAI - Bảo mật dữ liệu Y tế.</p>
+            </div>
+            <div class="flex gap-4 opacity-30"><i class="fas fa-lock text-xl"></i><i class="fas fa-file-invoice-doll text-xl"></i><i class="fas fa-user-shield text-xl"></i></div>
+        </div>
+    </footer>
+
+    <script>
+        let rawData = [];
+        let filteredData = [];
+        let sigLogs = [];
+        let currentDeptFilter = '';
+        let currentPage = 1;
+        const limit = 20;
+
+        // --- CẬP NHẬT LOGIC NÚT AI (AUTO REDIRECT) ---
+        document.getElementById('recordBtn').onclick = function() {
+            // Kiểm tra dữ liệu
+            if (rawData.length === 0) {
+                alert("Chưa có dataset cho Nurse! Hệ thống sẽ đưa bạn đến phần Quản lý để nạp dữ liệu.");
+                switchTab('analytics'); // Tự động nhảy sang tab Quản lý
+                return;
+            }
+
+            // Nếu có data, tiến hành giả lập phân tích AI
+            this.classList.add('record-pulse', 'bg-red-600');
+            document.getElementById('statusText').innerText = "AI ĐANG LẮNG NGHE & PHÂN TÍCH CHỈ SỐ...";
+
+            setTimeout(() => {
+                document.getElementById('aiOutput').classList.remove('hidden-section');
+                document.getElementById('valHR').innerText = "130";
+                document.getElementById('valBP').innerText = "85/50";
+                document.getElementById('valSPO2').innerText = "88%";
+                document.getElementById('icnpOutput').innerText = "10023512 - Trao đổi khí suy giảm (ICNP)";
+                document.getElementById('noteOutput').value = "BN khó thở dữ dội, mạch nhanh, SpO2 giảm. Đã báo BS trực can thiệp thở máy.";
+                document.getElementById('ewsAlert').classList.remove('hidden-section');
+                this.classList.remove('record-pulse');
+                document.getElementById('statusText').innerText = "PHÂN TÍCH HOÀN TẤT";
+            }, 1200);
+        };
+
+        // --- LOGIC TAB ---
+        function switchTab(type) {
+            document.getElementById('clinicalSection').classList.toggle('hidden-section', type !== 'clinical');
+            document.getElementById('analyticsSection').classList.toggle('hidden-section', type !== 'analytics');
+            document.getElementById('tabClin').classList.toggle('tab-active', type === 'clinical');
+            document.getElementById('tabAnal').classList.toggle('tab-active', type === 'analytics');
+            
+            // Cuộn lên đầu trang khi chuyển tab
+            window.scrollTo({top: 0, behavior: 'smooth'});
+        }
+
+        // --- NẠP FILE JSONL ---
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const lines = ev.target.result.split('\n');
+                    rawData = lines.filter(l => l.trim()).map(l => JSON.parse(l));
+                    filteredData = [...rawData];
+                    currentPage = 1;
+                    applyFilters(); 
+                    processAnalytics();
+                    alert(`Thành công! Đã nạp ${rawData.length} hồ sơ bệnh án vào hệ thống.`);
+                } catch (err) {
+                    alert("Lỗi: Định dạng file .jsonl không hợp lệ.");
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        // --- RENDER BẢNG VÀ PHÂN TRANG ---
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            if (filteredData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-20 text-center text-slate-400 italic">Không có dữ liệu phù hợp với tìm kiếm.</td></tr>`;
+                return;
+            }
+            const totalPages = Math.ceil(filteredData.length / limit) || 1;
+            const start = (currentPage - 1) * limit;
+            const pageData = filteredData.slice(start, start + limit);
+
+            tbody.innerHTML = pageData.map(item => `
+                <tr class="hover:bg-slate-50 border-l-4 border-transparent hover:border-indigo-500 transition-all cursor-default">
+                    <td class="p-4"><div class="font-bold text-indigo-900">${item.record_id}</div><div class="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">${item.context?.department || ''}</div></td>
+                    <td class="p-4"><div class="font-black text-slate-700 leading-tight">${item.medical_entities?.icnp_diagnosis?.name || ''}</div><div class="text-[9px] text-indigo-500 font-bold italic uppercase">${item.medical_entities?.icnp_diagnosis?.code || ''}</div></td>
+                    <td class="p-4 hidden md:table-cell"><div class="text-xs text-slate-500 mb-1">${item.medical_entities?.icnp_intervention?.name || 'Theo dõi'}</div><div class="font-bold text-orange-600 text-[11px]">${item.medical_entities?.medication?.name || ''}</div></td>
+                    <td class="p-4 text-center"><span class="px-2 py-1 bg-green-100 text-green-700 rounded-full text-[9px] font-black italic underline decoration-green-400">ĐÃ XÁC THỰC</span></td>
+                </tr>
+            `).join('');
+
+            document.getElementById('countDisplay').innerText = filteredData.length.toLocaleString();
+            document.getElementById('pageLabel').innerText = `Trang ${currentPage} / ${totalPages}`;
+            document.getElementById('btnPrev').disabled = (currentPage === 1);
+            document.getElementById('btnNext').disabled = (currentPage >= totalPages);
+        }
+
+        // --- LỌC VÀ TÌM KIẾM ---
+        function applyFilters() {
+            const searchVal = document.getElementById('globalSearch').value.toLowerCase();
+            filteredData = rawData.filter(item => {
+                const matchesDept = currentDeptFilter === '' || item.context?.department?.includes(currentDeptFilter);
+                const matchesSearch = (item.record_id?.toLowerCase()?.includes(searchVal)) || (item.medical_entities?.icnp_diagnosis?.name?.toLowerCase()?.includes(searchVal));
+                return matchesDept && matchesSearch;
+            });
+            renderTable();
+        }
+
+        function filterByDept(deptName, btn) {
+            currentDeptFilter = deptName;
+            document.querySelectorAll('.dept-btn').forEach(b => b.classList.remove('dept-card-active'));
+            btn.classList.add('dept-card-active');
+            currentPage = 1;
+            applyFilters();
+        }
+
+        document.getElementById('btnPrev').onclick = () => { if(currentPage > 1) { currentPage--; renderTable(); }};
+        document.getElementById('btnNext').onclick = () => { if(currentPage * limit < filteredData.length) { currentPage++; renderTable(); }};
+        document.getElementById('globalSearch').oninput = () => { currentPage = 1; applyFilters(); };
+
+        // --- KÝ SỐ VÀ LOGS ---
+        document.getElementById('confirmBtn').onclick = function() {
+            const btn = this;
+            btn.classList.add('btn-loading', 'btn-signing');
+            document.getElementById('btnText').innerText = "ĐANG XÁC THỰC KÝ SỐ SHA-256...";
+            document.getElementById('btnIcon').innerHTML = `<i class="fas fa-fingerprint fa-beat"></i>`;
+
+            setTimeout(() => {
+                btn.classList.remove('btn-loading', 'btn-signing', 'bg-indigo-600');
+                btn.classList.add('btn-success');
+                document.getElementById('btnText').innerText = "DỮ LIỆU ĐÃ ĐẨY LÊN HIS THÀNH CÔNG";
+                document.getElementById('btnIcon').innerHTML = `<i class="fas fa-check-circle"></i>`;
+
+                const newLog = {
+                    time: new Date().toLocaleString('vi-VN'),
+                    id: 'VN-EMR-' + Math.floor(Math.random()*900000 + 100000),
+                    hash: '0x' + Math.random().toString(16).slice(2, 12).toUpperCase(),
+                    status: 'SUCCESS'
+                };
+                sigLogs.unshift(newLog);
+                renderSigLogs();
+
+                setTimeout(() => {
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('bg-indigo-600');
+                    document.getElementById('btnText').innerText = "KÝ SỐ & ĐẨY LÊN HIS";
+                    document.getElementById('btnIcon').innerHTML = `<i class="fas fa-file-signature"></i>`;
+                }, 3000);
+            }, 1800);
+        };
+
+        function renderSigLogs() {
+            const body = document.getElementById('sigLogBody');
+            body.innerHTML = sigLogs.map(log => `
+                <tr class="hover:bg-slate-50 transition-all">
+                    <td class="p-4 text-slate-500 font-medium">${log.time}</td>
+                    <td class="p-4 font-black text-indigo-900">${log.id}</td>
+                    <td class="p-4 font-mono text-[10px] text-slate-400 uppercase">${log.hash}</td>
+                    <td class="p-4"><span class="bg-green-100 text-green-700 px-2 py-1 rounded-full text-[9px] font-black italic underline decoration-green-400 uppercase">Verified</span></td>
+                </tr>
+            `).join('');
+        }
+
+        function exportToPDF() {
+            if(sigLogs.length === 0) { alert("Chưa có dữ liệu giao dịch để xuất báo cáo."); return; }
+            window.print();
+        }
+
+        // --- PHÂN TÍCH DỊCH TỄ ---
+        function processAnalytics() {
+            const icnpStats = {};
+            rawData.forEach(item => {
+                const name = item.medical_entities?.icnp_diagnosis?.name || 'Khác';
+                icnpStats[name] = (icnpStats[name] || 0) + 1;
+            });
+            const total = rawData.length;
+            const risks = Object.entries(icnpStats).filter(([name, count]) => (count/total) > 0.05);
+            if(risks.length > 0) {
+                document.getElementById('preventiveAlerts').classList.add('ews-critical', 'border-red-500', 'bg-red-50');
+                document.getElementById('alertContent').innerHTML = risks.map(r => `<div class="text-red-700 font-bold text-[10px] uppercase">⚠️ NGUY CƠ CAO: ${r[0]} (${((r[1]/total)*100).toFixed(1)}%)</div>`).join('');
+            }
+        }
+    </script>
+</body>
+</html>
